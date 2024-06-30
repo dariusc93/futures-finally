@@ -2,6 +2,14 @@
 name = "futures-finally"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75"
+description = """
+A utility that executes a future after the completion of a future or stream.
+"""
+license = "Apache-2.0 OR MIT"
+repository = "https://github.com/dariusc93/futures-finally"
+authors = ["Darius Clark"]
+exclude = [".gitignore"]
 
 [dependencies]
 futures = "0.3.30"
