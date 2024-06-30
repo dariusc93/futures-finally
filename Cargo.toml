@@ -1,10 +1,10 @@
 [package]
 name = "futures-finally"
-version = "0.1.0"
+version = "0.1.0-alpha"
 edition = "2021"
 rust-version = "1.75"
 description = """
-A utility that executes a future after the completion of a future or stream.
+A utility that executes a future after the completion of a future or stream regardless of the value or outcome.
 """
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/dariusc93/futures-finally"
