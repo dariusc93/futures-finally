@@ -62,6 +62,77 @@ pub mod future {
     }
 }
 
+pub mod try_future {
+    use futures::future::{Future, TryFuture};
+    use pin_project::pin_project;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    #[pin_project]
+    pub struct ThenTryFinally<FT, Fut, F>
+    where
+        FT: TryFuture,
+    {
+        #[pin]
+        item: Option<FT>,
+        #[pin]
+        fut: Option<Fut>,
+        f: Option<F>,
+        output: Option<Result<FT::Ok, FT::Error>>,
+    }
+
+    pub trait ThenFinallyTryFutureExt: Sized {
+        fn then_try_finally<Fut: Future, F: FnOnce() -> Fut>(
+            self,
+            f: F,
+        ) -> ThenTryFinally<Self, Fut, F>
+        where
+            Self: TryFuture,
+        {
+            ThenTryFinally {
+                item: Some(self),
+                fut: None,
+                f: Some(f),
+                output: None,
+            }
+        }
+    }
+
+    impl<T: Sized> ThenFinallyTryFutureExt for T {}
+
+    impl<FT: TryFuture, Fut: Future, F> Future for ThenTryFinally<FT, Fut, F>
+    where
+        F: FnOnce() -> Fut,
+    {
+        type Output = Result<FT::Ok, FT::Error>;
+        fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+            let mut this = self.project();
+
+            if let Some(item) = this.item.as_mut().as_pin_mut() {
+                let output = futures::ready!(item.try_poll(cx));
+                this.item.set(None);
+                let func = this.f.take().expect("function is valid");
+                if let Err(e) = output {
+                    return Poll::Ready(Err(e));
+                }
+
+                this.output.replace(output);
+                let fut = Some(func());
+                this.fut.set(fut);
+            }
+
+            if let Some(fut) = this.fut.as_mut().as_pin_mut() {
+                futures::ready!(fut.poll(cx));
+                this.fut.set(None);
+            }
+
+            let output = this.output.take();
+
+            Poll::Ready(output.expect("output from future to be value"))
+        }
+    }
+}
+
 pub mod stream {
     use futures::{Future, Stream};
     use pin_project::pin_project;
@@ -196,9 +267,10 @@ pub mod try_stream {
 mod test {
     use crate::future::ThenFinallyFutureExt;
     use crate::stream::FinallyStreamExt;
+    use crate::try_future::ThenFinallyTryFutureExt;
+    use crate::try_stream::FinallyTryStreamExt;
     use futures::{StreamExt, TryStreamExt};
     use std::convert::Infallible;
-    use crate::try_stream::FinallyTryStreamExt;
 
     #[test]
     fn future_final() {
@@ -212,6 +284,27 @@ mod test {
                 .await;
 
             assert_eq!(val, 1);
+        });
+    }
+
+    #[test]
+    fn try_future_final() {
+        futures::executor::block_on(async move {
+            let mut val = 0;
+
+            futures::future::ok::<_, Infallible>(0)
+                .then_try_finally(|| async {
+                    val = 1;
+                })
+                .await
+                .expect("infallible");
+
+            assert_eq!(val, 1);
+
+            futures::future::err::<i8, std::io::Error>(std::io::ErrorKind::Other.into())
+                .then_try_finally(|| async { unreachable!() })
+                .await
+                .expect_err("should return an error");
         });
     }
 
@@ -239,9 +332,10 @@ mod test {
         futures::executor::block_on(async move {
             let mut val = 0;
 
-            let st = futures::stream::once(async { Ok::<_, Infallible>(0) }).try_finally(|| async {
-                val = 1;
-            });
+            let st =
+                futures::stream::once(async { Ok::<_, Infallible>(0) }).try_finally(|| async {
+                    val = 1;
+                });
 
             futures::pin_mut!(st);
 
@@ -252,9 +346,7 @@ mod test {
             let st = futures::stream::once(async {
                 Err::<i8, std::io::Error>(std::io::ErrorKind::Other.into())
             })
-            .try_finally(|| async {
-                unreachable!()
-            });
+            .try_finally(|| async { unreachable!() });
 
             futures::pin_mut!(st);
 
