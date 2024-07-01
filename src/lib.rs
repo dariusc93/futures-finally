@@ -198,6 +198,7 @@ mod test {
     use crate::stream::FinallyStreamExt;
     use futures::{StreamExt, TryStreamExt};
     use std::convert::Infallible;
+    use crate::try_stream::FinallyTryStreamExt;
 
     #[test]
     fn future_final() {
@@ -238,7 +239,7 @@ mod test {
         futures::executor::block_on(async move {
             let mut val = 0;
 
-            let st = futures::stream::once(async { Ok::<_, Infallible>(0) }).finally(|| async {
+            let st = futures::stream::once(async { Ok::<_, Infallible>(0) }).try_finally(|| async {
                 val = 1;
             });
 
@@ -251,8 +252,8 @@ mod test {
             let st = futures::stream::once(async {
                 Err::<i8, std::io::Error>(std::io::ErrorKind::Other.into())
             })
-            .finally(|| async {
-                val = 5;
+            .try_finally(|| async {
+                unreachable!()
             });
 
             futures::pin_mut!(st);
