@@ -15,6 +15,9 @@ pub mod future {
     }
 
     pub trait ThenFinallyFutureExt: Sized {
+        /// Consumes the current future into a new one which will execute an asynchronous upon completion of the future
+        ///
+        /// Note that this will execute the code regardless of a value that the future returns.
         fn then_finally<Fut: Future, F: FnOnce() -> Fut, O>(
             self,
             f: F,
@@ -75,6 +78,9 @@ pub mod stream {
     }
 
     pub trait FinallyStreamExt: Sized {
+        /// Consumes the current stream into a new one which will execute an asynchronous upon completion of the stream
+        ///
+        /// Note that this will execute the code regardless of a value that the stream returns.
         fn finally<Fut: Future, F: FnOnce() -> Fut>(self, f: F) -> Finally<Self, Fut, F> {
             Finally {
                 item: Some(self),
