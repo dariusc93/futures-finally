@@ -15,7 +15,7 @@ pub mod future {
     }
 
     pub trait ThenFinallyFutureExt: Sized {
-        fn then_finally<'a, Fut: Future, F: FnOnce() -> Fut, O>(
+        fn then_finally<Fut: Future, F: FnOnce() -> Fut, O>(
             self,
             f: F,
         ) -> ThenFinally<Self, Fut, F, O> {
