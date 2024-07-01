@@ -44,12 +44,12 @@ pub mod future {
                 let func = this.f.take().expect("function is valid");
                 let fut = Some(func());
                 this.fut.set(fut);
-                this.item.as_mut().as_pin_mut().take();
+                this.item.set(None);
             }
 
             if let Some(fut) = this.fut.as_mut().as_pin_mut() {
                 futures::ready!(fut.poll(cx));
-                this.fut.as_mut().as_pin_mut().take();
+                this.fut.set(None);
             }
 
             let output = this.output.take();
@@ -101,14 +101,14 @@ pub mod stream {
                         let func = this.f.take().expect("function is valid");
                         let fut = Some(func());
                         this.fut.set(fut);
-                        this.item.as_mut().as_pin_mut().take();
+                        this.item.set(None);
                     }
                 };
             }
 
             if let Some(fut) = this.fut.as_mut().as_pin_mut() {
                 futures::ready!(fut.poll(cx));
-                this.fut.as_mut().as_pin_mut().take();
+                this.fut.set(None);
             }
 
             Poll::Ready(None)
