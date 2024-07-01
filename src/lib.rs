@@ -196,7 +196,8 @@ pub mod try_stream {
 mod test {
     use crate::future::ThenFinallyFutureExt;
     use crate::stream::FinallyStreamExt;
-    use futures::StreamExt;
+    use futures::{StreamExt, TryStreamExt};
+    use std::convert::Infallible;
 
     #[test]
     fn future_final() {
@@ -226,6 +227,38 @@ mod test {
 
             while let Some(v) = st.next().await {
                 assert_eq!(v, 0);
+            }
+
+            assert_eq!(val, 1);
+        });
+    }
+
+    #[test]
+    fn try_stream_final() {
+        futures::executor::block_on(async move {
+            let mut val = 0;
+
+            let st = futures::stream::once(async { Ok::<_, Infallible>(0) }).finally(|| async {
+                val = 1;
+            });
+
+            futures::pin_mut!(st);
+
+            while let Ok(Some(v)) = st.try_next().await {
+                assert_eq!(v, 0);
+            }
+
+            let st = futures::stream::once(async {
+                Err::<i8, std::io::Error>(std::io::ErrorKind::Other.into())
+            })
+            .finally(|| async {
+                val = 5;
+            });
+
+            futures::pin_mut!(st);
+
+            while let Ok(_) = st.try_next().await {
+                unreachable!()
             }
 
             assert_eq!(val, 1);
