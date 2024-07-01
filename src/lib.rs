@@ -122,6 +122,76 @@ pub mod stream {
     }
 }
 
+pub mod try_stream {
+    use futures::{Future, Stream, TryStream};
+    use pin_project::pin_project;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
+    #[pin_project]
+    pub struct TryFinally<ST, Fut, F>
+    where
+        ST: TryStream,
+    {
+        #[pin]
+        item: Option<ST>,
+        #[pin]
+        fut: Option<Fut>,
+        f: Option<F>,
+    }
+
+    pub trait FinallyTryStreamExt: Sized {
+        fn try_finally<Fut: Future, F: FnOnce() -> Fut>(self, f: F) -> TryFinally<Self, Fut, F>
+        where
+            Self: TryStream,
+        {
+            TryFinally {
+                item: Some(self),
+                fut: None,
+                f: Some(f),
+            }
+        }
+    }
+
+    impl<T: Sized> FinallyTryStreamExt for T {}
+
+    impl<ST: TryStream, Fut: Future, F> Stream for TryFinally<ST, Fut, F>
+    where
+        F: FnOnce() -> Fut,
+    {
+        type Item = Result<ST::Ok, ST::Error>;
+        fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+            let mut this = self.project();
+
+            if let Some(item) = this.item.as_mut().as_pin_mut() {
+                let result = futures::ready!(item.try_poll_next(cx));
+
+                match result {
+                    Some(Ok(val)) => return Poll::Ready(Some(Ok(val))),
+                    Some(Err(e)) => {
+                        this.item.set(None);
+                        this.f.take();
+                        return Poll::Ready(Some(Err(e)));
+                    }
+                    None => {
+                        let func = this.f.take().expect("function is valid");
+                        let fut = Some(func());
+                        this.fut.set(fut);
+                        this.item.set(None);
+                    }
+                }
+            }
+
+            if let Some(fut) = this.fut.as_mut().as_pin_mut() {
+                futures::ready!(fut.poll(cx));
+                this.fut.set(None);
+            }
+
+            Poll::Ready(None)
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::future::ThenFinallyFutureExt;
