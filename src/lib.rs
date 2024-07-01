@@ -5,9 +5,9 @@ pub mod future {
     use std::task::{Context, Poll};
 
     #[pin_project]
-    pub struct ThenFinally<Item, Fut, F, O> {
+    pub struct ThenFinally<FT, Fut, F, O> {
         #[pin]
-        item: Option<Item>,
+        item: Option<FT>,
         #[pin]
         fut: Option<Fut>,
         f: Option<F>,
@@ -33,11 +33,11 @@ pub mod future {
 
     impl<T: Sized> ThenFinallyFutureExt for T {}
 
-    impl<Item: Future<Output = O>, Fut: Future, F, O> Future for ThenFinally<Item, Fut, F, O>
+    impl<FT: Future<Output = O>, Fut: Future, F, O> Future for ThenFinally<FT, Fut, F, O>
     where
         F: FnOnce() -> Fut,
     {
-        type Output = Item::Output;
+        type Output = FT::Output;
         fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
             let mut this = self.project();
 
@@ -69,9 +69,9 @@ pub mod stream {
     use std::task::{Context, Poll};
 
     #[pin_project]
-    pub struct Finally<Item, Fut, F> {
+    pub struct Finally<ST, Fut, F> {
         #[pin]
-        item: Option<Item>,
+        item: Option<ST>,
         #[pin]
         fut: Option<Fut>,
         f: Option<F>,
@@ -92,11 +92,11 @@ pub mod stream {
 
     impl<T: Sized> FinallyStreamExt for T {}
 
-    impl<Item: Stream, Fut: Future, F> Stream for Finally<Item, Fut, F>
+    impl<ST: Stream, Fut: Future, F> Stream for Finally<ST, Fut, F>
     where
         F: FnOnce() -> Fut,
     {
-        type Item = Item::Item;
+        type Item = ST::Item;
         fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
             let mut this = self.project();
 
